@@ -74,11 +74,13 @@ namespace wallet_rpc
     {
       uint64_t 	 balance;
       uint64_t 	 unlocked_balance;
+	  bool       multisig_import_needed;
       std::vector<per_subaddress_info> per_subaddress;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(balance)
         KV_SERIALIZE(unlocked_balance)
+		KV_SERIALIZE(multisig_import_needed)
         KV_SERIALIZE(per_subaddress)
       END_KV_SERIALIZE_MAP()
     };
@@ -305,13 +307,15 @@ namespace wallet_rpc
       std::string tx_hash;
       std::string tx_key;
       std::list<std::string> amount_keys;
-      uint64_t fee;
+	  uint64_t fee;
+	  std::string multisig_txset;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(tx_hash)
         KV_SERIALIZE(tx_key)
         KV_SERIALIZE(amount_keys)
         KV_SERIALIZE(fee)
+		KV_SERIALIZE(multisig_txset)
       END_KV_SERIALIZE_MAP()
     };
   };
@@ -358,12 +362,14 @@ namespace wallet_rpc
       std::list<std::string> tx_key_list;
       std::list<uint64_t> amount_list;
       std::list<uint64_t> fee_list;
+	  std::string multisig_txset;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(tx_hash_list)
         KV_SERIALIZE(tx_key_list)
         KV_SERIALIZE(amount_list)
-        KV_SERIALIZE(fee_list)
+		KV_SERIALIZE(fee_list)
+		KV_SERIALIZE(multisig_txset)
       END_KV_SERIALIZE_MAP()
     };
   };
@@ -394,12 +400,14 @@ namespace wallet_rpc
     {
       std::list<std::string> tx_hash_list;
       std::list<std::string> tx_key_list;
-      std::list<uint64_t> fee_list;
+	  std::list<uint64_t> fee_list;
+	  std::list<std::string> multisig_txset;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(tx_hash_list)
         KV_SERIALIZE(tx_key_list)
-        KV_SERIALIZE(fee_list)
+		KV_SERIALIZE(fee_list)
+		KV_SERIALIZE(multisig_txset)
       END_KV_SERIALIZE_MAP()
     };
   };
@@ -446,12 +454,14 @@ namespace wallet_rpc
     {
       std::list<std::string> tx_hash_list;
       std::list<std::string> tx_key_list;
-      std::list<uint64_t> fee_list;
+	  std::list<uint64_t> fee_list;
+	  std::list<std::string> multisig_txset;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(tx_hash_list)
         KV_SERIALIZE(tx_key_list)
-        KV_SERIALIZE(fee_list)
+		KV_SERIALIZE(fee_list)
+		KV_SERIALIZE(multisig_txset)
       END_KV_SERIALIZE_MAP()
     };
   };
@@ -1078,6 +1088,180 @@ namespace wallet_rpc
     struct response
     {
       BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+  struct COMMAND_RPC_IS_MULTISIG
+  {
+    struct request
+    {
+      BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response
+    {
+      bool multisig;
+      bool ready;
+      uint32_t threshold;
+      uint32_t total;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(multisig)
+        KV_SERIALIZE(ready)
+        KV_SERIALIZE(threshold)
+        KV_SERIALIZE(total)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
+  struct COMMAND_RPC_PREPARE_MULTISIG
+  {
+    struct request
+    {
+      BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response
+    {
+      std::string multisig_info;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(multisig_info)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
+  struct COMMAND_RPC_MAKE_MULTISIG
+  {
+    struct request
+    {
+      std::vector<std::string> multisig_info;
+      uint32_t threshold;
+      std::string password;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(multisig_info)
+        KV_SERIALIZE(threshold)
+        KV_SERIALIZE(password)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response
+    {
+      std::string address;
+      std::string multisig_info;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(address)
+        KV_SERIALIZE(multisig_info)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
+  struct COMMAND_RPC_EXPORT_MULTISIG
+  {
+    struct request
+    {
+      BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response
+    {
+      std::string info;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(info)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
+  struct COMMAND_RPC_IMPORT_MULTISIG
+  {
+    struct request
+    {
+      std::vector<std::string> info;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(info)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response
+    {
+      uint64_t n_outputs;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(n_outputs)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
+  struct COMMAND_RPC_FINALIZE_MULTISIG
+  {
+    struct request
+    {
+      std::string password;
+      std::vector<std::string> multisig_info;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(password)
+        KV_SERIALIZE(multisig_info)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response
+    {
+      std::string address;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(address)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
+  struct COMMAND_RPC_SIGN_MULTISIG
+  {
+    struct request
+    {
+      std::string tx_data_hex;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(tx_data_hex)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response
+    {
+      std::string tx_data_hex;
+      std::list<std::string> tx_hash_list;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(tx_data_hex)
+        KV_SERIALIZE(tx_hash_list)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
+  struct COMMAND_RPC_SUBMIT_MULTISIG
+  {
+    struct request
+    {
+      std::string tx_data_hex;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(tx_data_hex)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response
+    {
+      std::list<std::string> tx_hash_list;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(tx_hash_list)
       END_KV_SERIALIZE_MAP()
     };
   };

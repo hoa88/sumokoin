@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2017, The Monero Project
+# Copyright (c) 2017-2018, The Monero Project
 #
 # All rights reserved.
 #
@@ -26,68 +26,28 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-set(cryptonote_core_sources
-  account.cpp
-  blockchain.cpp
-  checkpoints.cpp
-  cryptonote_basic_impl.cpp
-  cryptonote_core.cpp
-  cryptonote_format_utils.cpp
-  difficulty.cpp
-  miner.cpp
-  tx_pool.cpp
-  hardfork.cpp
-  ../multisig/multisig.cpp)
+set(gen_multisig_sources
+  gen_multisig.cpp)
 
-set(cryptonote_core_headers)
-
-set(cryptonote_core_private_headers
-  account.h
-  account_boost_serialization.h
-  blockchain_storage_boost_serialization.h
-  blockchain.h
-  checkpoints.h
-  connection_context.h
-  cryptonote_basic.h
-  cryptonote_basic_impl.h
-  cryptonote_boost_serialization.h
-  cryptonote_core.h
-  cryptonote_format_utils.h
-  cryptonote_stat_info.h
-  difficulty.h
-  miner.h
-  tx_extra.h
-  tx_pool.h
-  verification_context.h
-  hardfork.h
-  subaddress_index.h
-  ../multisig/multisig.h)
-
-if(PER_BLOCK_CHECKPOINT)
-  set(Blocks "blocks")
-else()
-  set(Blocks "")
-endif()
-
-sumokoin_private_headers(cryptonote_core
-  ${crypto_private_headers})
-sumokoin_add_library(cryptonote_core
-  ${cryptonote_core_sources}
-  ${cryptonote_core_headers}
-  ${cryptonote_core_private_headers})
-target_link_libraries(cryptonote_core
-  PUBLIC
-    common
-    crypto
-    otshell_utils
-    blockchain_db
-    ringct
-    ${Boost_DATE_TIME_LIBRARY}
-    ${Boost_PROGRAM_OPTIONS_LIBRARY}
-    ${Boost_SERIALIZATION_LIBRARY}
-    ${Boost_FILESYSTEM_LIBRARY}
-    ${Boost_SYSTEM_LIBRARY}
-    ${Boost_THREAD_LIBRARY}
+sumokoin_add_executable(gen_multisig
+  ${gen_multisig_sources})
+target_link_libraries(gen_multisig
   PRIVATE
-    ${Blocks}
+    wallet
+    cryptonote_core
+    crypto
+    common
+    ${Boost_CHRONO_LIBRARY}
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_THREAD_LIBRARY}
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${GNU_READLINE_LIBRARY}
+    ${OPENSSL_LIBRARIES}
     ${EXTRA_LIBRARIES})
+add_dependencies(gen_multisig
+  version)
+set_property(TARGET gen_multisig
+  PROPERTY
+    OUTPUT_NAME "sumo-gen-trusted-multisig")
+install(TARGETS gen_multisig DESTINATION bin)

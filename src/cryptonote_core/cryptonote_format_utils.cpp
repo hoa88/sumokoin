@@ -39,6 +39,7 @@ using namespace epee;
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
 #include "ringct/rctSigs.h"
+#include "multisig/multisig.h"
 
 #define ENCRYPTED_PAYMENT_ID_TAIL 0x8d
 
@@ -64,6 +65,31 @@ static const uint64_t valid_decomposed_outputs[] = {
   (uint64_t)1000000000000000000, (uint64_t)2000000000000000000, (uint64_t)3000000000000000000, (uint64_t)4000000000000000000, (uint64_t)5000000000000000000, (uint64_t)6000000000000000000, (uint64_t)7000000000000000000, (uint64_t)8000000000000000000, (uint64_t)9000000000000000000, // 1 meganero
   (uint64_t)10000000000000000000ull
 };
+
+#define CHECK_AND_ASSERT_THROW_MES_L1(expr, message) {if(!(expr)) {LOG_PRINT_L1(message); throw std::runtime_error(message);}}
+
+namespace cryptonote
+{
+  static inline unsigned char *operator &(ec_point &point) {
+    return &reinterpret_cast<unsigned char &>(point);
+  }
+  static inline const unsigned char *operator &(const ec_point &point) {
+    return &reinterpret_cast<const unsigned char &>(point);
+  }
+
+  // a copy of rct::addKeys, since we can't link to libringct to avoid circular dependencies
+  static void add_public_key(crypto::public_key &AB, const crypto::public_key &A, const crypto::public_key &B) {
+      ge_p3 B2, A2;
+      CHECK_AND_ASSERT_THROW_MES_L1(ge_frombytes_vartime(&B2, &B) == 0, "ge_frombytes_vartime failed at "+boost::lexical_cast<std::string>(__LINE__));
+      CHECK_AND_ASSERT_THROW_MES_L1(ge_frombytes_vartime(&A2, &A) == 0, "ge_frombytes_vartime failed at "+boost::lexical_cast<std::string>(__LINE__));
+      ge_cached tmp2;
+      ge_p3_to_cached(&tmp2, &B2);
+      ge_p1p1 tmp3;
+      ge_add(&tmp3, &A2, &tmp2);
+      ge_p1p1_to_p3(&A2, &tmp3);
+      ge_p3_tobytes(&AB, &A2);
+  }
+}
 
 namespace cryptonote
 {
@@ -270,6 +296,7 @@ namespace cryptonote
       crypto::derive_secret_key(recv_derivation, real_output_index, ack.m_spend_secret_key, scalar_step1); // computes Hs(a*R) + b
 
       // step 2: add Hs(a || index_major || index_minor)
+      crypto::secret_key subaddr_sk;
       crypto::secret_key scalar_step2;
       if (received_index.is_zero())
       {
@@ -277,13 +304,32 @@ namespace cryptonote
       }
       else
       {
-        crypto::secret_key m = get_subaddress_secret_key(ack.m_view_secret_key, received_index);
-        sc_add((unsigned char*)&scalar_step2, (unsigned char*)&scalar_step1, (unsigned char*)&m);
+        subaddr_sk = get_subaddress_secret_key(ack.m_view_secret_key, received_index);
+        sc_add((unsigned char*)&scalar_step2, (unsigned char*)&scalar_step1, (unsigned char*)&subaddr_sk);
       }
 
       in_ephemeral.sec = scalar_step2;
-      crypto::secret_key_to_public_key(in_ephemeral.sec, in_ephemeral.pub);
-      CHECK_AND_ASSERT_MES(in_ephemeral.pub == out_key, false, "key image helper precomp: given output pubkey doesn't match the derived one");
+      
+      if (ack.m_multisig_keys.empty())
+      {
+        // when not in multisig, we know the full spend secret key, so the output pubkey can be obtained by scalarmultBase
+        CHECK_AND_ASSERT_MES(crypto::secret_key_to_public_key(in_ephemeral.sec, in_ephemeral.pub), false, "Failed to derive public key");
+      }
+      else
+      {
+        // when in multisig, we only know the partial spend secret key. but we do know the full spend public key, so the output pubkey can be obtained by using the standard CN key derivation
+        CHECK_AND_ASSERT_MES(crypto::derive_public_key(recv_derivation, real_output_index, ack.m_account_address.m_spend_public_key, in_ephemeral.pub), false, "Failed to derive public key");
+        // and don't forget to add the contribution from the subaddress part
+        if (!received_index.is_zero())
+        {
+          crypto::public_key subaddr_pk;
+          CHECK_AND_ASSERT_MES(crypto::secret_key_to_public_key(subaddr_sk, subaddr_pk), false, "Failed to derive public key");
+          add_public_key(in_ephemeral.pub, in_ephemeral.pub, subaddr_pk);
+        }
+      }
+
+      CHECK_AND_ASSERT_MES(in_ephemeral.pub == out_key,
+           false, "key image helper precomp: given output pubkey doesn't match the derived one");
     }
 
     crypto::generate_key_image(in_ephemeral.pub, in_ephemeral.sec, ki);
@@ -564,17 +610,20 @@ namespace cryptonote
     return encrypt_payment_id(payment_id, public_key, secret_key);
   }
   //---------------------------------------------------------------
-  bool construct_tx_and_get_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, const cryptonote::account_public_address& change_addr, std::vector<uint8_t> extra, transaction& tx, uint64_t unlock_time, crypto::secret_key &tx_key, std::vector<crypto::secret_key> &additional_tx_keys, bool rct)
+  bool construct_tx_and_get_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, const cryptonote::account_public_address& change_addr, std::vector<uint8_t> extra, transaction& tx, uint64_t unlock_time, crypto::secret_key &tx_key, std::vector<crypto::secret_key> &additional_tx_keys, bool rct, rct::multisig_out *msout)
   {
     if (destinations.empty())
     {
       LOG_ERROR("The destinations must be non-empty");
       return false;
     }
-
-    std::vector<rct::key> amount_keys;
-    tx.set_null();
-    amount_keys.clear();
+	std::vector<rct::key> amount_keys;
+	tx.set_null();
+	amount_keys.clear();
+	if (msout)
+	{
+		msout->c.clear();
+	}
 
     tx.version = CURRENT_TRANSACTION_VERSION;
     tx.unlock_time = unlock_time;
@@ -657,21 +706,21 @@ namespace cryptonote
         return false;
       }
 
-      //check that derivated key is equal with real output key
-      if( !(in_ephemeral.pub == src_entr.outputs[src_entr.real_output].second.dest) )
-      {
-        LOG_ERROR("derived public key mismatch with output public key at index " << idx << ", real out " << src_entr.real_output << "! "<< ENDL << "derived_key:"
-          << string_tools::pod_to_hex(in_ephemeral.pub) << ENDL << "real output_public_key:"
-          << string_tools::pod_to_hex(src_entr.outputs[src_entr.real_output].second) );
-        LOG_ERROR("amount " << src_entr.amount << ", rct " << src_entr.rct);
-        LOG_ERROR("tx pubkey " << src_entr.real_out_tx_key << ", real_output_in_tx_index " << src_entr.real_output_in_tx_index);
-        return false;
-      }
+		//check that derivated key is equal with real output key (if non multisig)
+		if (!msout && !(in_ephemeral.pub == src_entr.outputs[src_entr.real_output].second.dest))
+		{
+			LOG_ERROR("derived public key mismatch with output public key at index " << idx << ", real out " << src_entr.real_output << "! " << ENDL << "derived_key:"
+				<< string_tools::pod_to_hex(in_ephemeral.pub) << ENDL << "real output_public_key:"
+				<< string_tools::pod_to_hex(src_entr.outputs[src_entr.real_output].second.dest));
+			LOG_ERROR("amount " << src_entr.amount << ", rct " << src_entr.rct);
+			LOG_ERROR("tx pubkey " << src_entr.real_out_tx_key << ", real_output_in_tx_index " << src_entr.real_output_in_tx_index);
+			return false;
+		}
 
-      //put key image into tx input
-      txin_to_key input_to_key;
-      input_to_key.amount = src_entr.amount;
-      input_to_key.k_image = img;
+		//put key image into tx input
+		txin_to_key input_to_key;
+		input_to_key.amount = src_entr.amount;
+		input_to_key.k_image = msout ? rct::rct2ki(src_entr.multisig_kLRki.ki) : img;
 
       //fill outputs array and use relative offsets
       BOOST_FOREACH(const tx_source_entry::output_entry& out_entry, src_entr.outputs)
@@ -857,6 +906,7 @@ namespace cryptonote
     rct::keyV rct_destinations;
     std::vector<uint64_t> inamounts, outamounts;
     std::vector<unsigned int> index;
+	std::vector<rct::multisig_kLRki> kLRki;
     for (size_t i = 0; i < sources.size(); ++i)
     {
       rct::ctkey ctkey;
@@ -869,6 +919,10 @@ namespace cryptonote
       inSk.push_back(ctkey);
       // inPk: (public key, commitment)
       // will be done when filling in mixRing
+		if (msout)
+		{
+			kLRki.push_back(sources[i].multisig_kLRki);
+		}
     }
     for (size_t i = 0; i < tx.vout.size(); ++i)
     {
@@ -918,9 +972,9 @@ namespace cryptonote
     get_transaction_prefix_hash(tx, tx_prefix_hash);
     rct::ctkeyV outSk;
     if (use_simple_rct)
-      tx.rct_signatures = rct::genRctSimple(rct::hash2rct(tx_prefix_hash), inSk, rct_destinations, inamounts, outamounts, amount_in - amount_out, mixRing, amount_keys, index, outSk);
-    else
-      tx.rct_signatures = rct::genRct(rct::hash2rct(tx_prefix_hash), inSk, rct_destinations, outamounts, mixRing, amount_keys, sources[0].real_output, outSk); // same index assumption
+	  tx.rct_signatures = rct::genRctSimple(rct::hash2rct(tx_prefix_hash), inSk, rct_destinations, inamounts, outamounts, amount_in - amount_out, mixRing, amount_keys, msout ? &kLRki : NULL, msout, index, outSk);
+	else
+	  tx.rct_signatures = rct::genRct(rct::hash2rct(tx_prefix_hash), inSk, rct_destinations, outamounts, mixRing, amount_keys, msout ? &kLRki[0] : NULL, msout, sources[0].real_output, outSk); // same index assumption
 
     CHECK_AND_ASSERT_MES(tx.vout.size() == outSk.size(), false, "outSk size does not match vout");
 
@@ -935,7 +989,7 @@ namespace cryptonote
     subaddresses[sender_account_keys.m_account_address.m_spend_public_key] = { 0, 0 };
     crypto::secret_key tx_key;
     std::vector<crypto::secret_key> additional_tx_keys;
-    return construct_tx_and_get_tx_key(sender_account_keys, subaddresses, sources, destinations, destinations.back().addr, extra, tx, unlock_time, tx_key, additional_tx_keys);
+	return construct_tx_and_get_tx_key(sender_account_keys, subaddresses, sources, destinations, destinations.back().addr, extra, tx, unlock_time, tx_key, additional_tx_keys, true, NULL);
   }
   //---------------------------------------------------------------
   bool get_inputs_money_amount(const transaction& tx, uint64_t& money)

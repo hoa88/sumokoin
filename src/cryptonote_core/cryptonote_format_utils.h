@@ -64,6 +64,7 @@ namespace cryptonote
     uint64_t amount;                    //money
     bool rct;                           //true if the output is rct
     rct::key mask;                      //ringct amount mask
+	rct::multisig_kLRki multisig_kLRki; //multisig info
 
     void push_output(uint64_t idx, const crypto::public_key &k, uint64_t amount) { outputs.push_back(std::make_pair(idx, rct::ctkey({rct::pk2rct(k), rct::zeroCommit(amount)}))); }
 
@@ -75,6 +76,7 @@ namespace cryptonote
       VARINT_FIELD(amount)
       FIELD(rct)
       FIELD(mask)
+	  FIELD(multisig_kLRki)
     END_SERIALIZE()
   };
 
@@ -95,8 +97,8 @@ namespace cryptonote
   };
 
   //---------------------------------------------------------------
-  bool construct_tx(const account_keys& sender_account_keys, const std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, std::vector<uint8_t> extra, transaction& tx, uint64_t unlock_time);
-  bool construct_tx_and_get_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, const cryptonote::account_public_address& change_addr, std::vector<uint8_t> extra, transaction& tx, uint64_t unlock_time, crypto::secret_key &tx_key, std::vector<crypto::secret_key> &additional_tx_keys, bool rct = true);
+  bool construct_tx(const account_keys& sender_account_keys, const std::vector<tx_source_entry> &sources, const std::vector<tx_destination_entry>& destinations, std::vector<uint8_t> extra, transaction& tx, uint64_t unlock_time);
+  bool construct_tx_and_get_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, const std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, const cryptonote::account_public_address& change_addr, std::vector<uint8_t> extra, transaction& tx, uint64_t unlock_time, crypto::secret_key &tx_key, std::vector<crypto::secret_key> &additional_tx_keys, bool rct = true, rct::multisig_out *msout = NULL);
 
   template<typename T>
   bool find_tx_extra_field_by_type(const std::vector<tx_extra_field>& tx_extra_fields, T& field, size_t index = 0)
@@ -277,4 +279,39 @@ namespace cryptonote
   CHECK_AND_ASSERT_MES(variant_var.type() == typeid(specific_type), fail_return_val, "wrong variant type: " << variant_var.type().name() << ", expected " << typeid(specific_type).name()); \
   specific_type& variable_name = boost::get<specific_type>(variant_var);
 
+}
+
+BOOST_CLASS_VERSION(cryptonote::tx_source_entry, 1)
+BOOST_CLASS_VERSION(cryptonote::tx_destination_entry, 1)
+
+namespace boost
+{
+	namespace serialization
+	{
+		template <class Archive>
+		inline void serialize(Archive &a, cryptonote::tx_source_entry &x, const boost::serialization::version_type ver)
+		{
+			a & x.outputs;
+			a & x.real_output;
+			a & x.real_out_tx_key;
+			a & x.real_output_in_tx_index;
+			a & x.amount;
+			a & x.rct;
+			a & x.mask;
+			if (ver < 1)
+				return;
+			a & x.multisig_kLRki;
+			a & x.real_out_additional_tx_keys;
+		}
+
+		template <class Archive>
+		inline void serialize(Archive& a, cryptonote::tx_destination_entry& x, const boost::serialization::version_type ver)
+		{
+			a & x.amount;
+			a & x.addr;
+			if (ver < 1)
+				return;
+			a & x.is_subaddress;
+		}
+	}
 }

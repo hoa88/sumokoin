@@ -49,6 +49,8 @@ namespace tools
     //     wallet_runtime_error *
     //       wallet_internal_error
     //         unexpected_txin_type
+	//       multisig_export_needed
+	//       multisig_import_needed
     //   std::logic_error
     //     wallet_logic_error *
     //       file_exists
@@ -176,6 +178,22 @@ namespace tools
     private:
       cryptonote::transaction m_tx;
     };
+	//----------------------------------------------------------------------------------------------------
+	struct multisig_export_needed : public wallet_runtime_error
+	{
+		explicit multisig_export_needed(std::string&& loc)
+			: wallet_runtime_error(std::move(loc), "This signature was made with stale data: export fresh multisig data, which other participants must then use")
+		{
+		}
+	};
+	//----------------------------------------------------------------------------------------------------
+	struct multisig_import_needed : public wallet_runtime_error
+	{
+		explicit multisig_import_needed(std::string&& loc)
+			: wallet_runtime_error(std::move(loc), "Not enough multisig data was found to sign: import multisig data from more other participants")
+		{
+		}
+	};
     //----------------------------------------------------------------------------------------------------
     const char* const file_error_messages[] = {
       "file already exists",
@@ -715,6 +733,12 @@ namespace tools
 
 #define STRINGIZE_DETAIL(x) #x
 #define STRINGIZE(x) STRINGIZE_DETAIL(x)
+
+#define THROW_WALLET_EXCEPTION(err_type, ...)                                                               \
+  do {                                                                                                      \
+    LOG_ERROR("THROW EXCEPTION: " << #err_type);                                                 \
+    tools::error::throw_wallet_ex<err_type>(std::string(__FILE__ ":" STRINGIZE(__LINE__)), ## __VA_ARGS__); \
+    } while(0)
 
 #define THROW_WALLET_EXCEPTION_IF(cond, err_type, ...)                                                      \
   if (cond)                                                                                                 \

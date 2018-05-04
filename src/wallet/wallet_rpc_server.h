@@ -92,6 +92,14 @@ namespace tools
         MAP_JON_RPC_WE("add_address_book",    on_add_address_book,    wallet_rpc::COMMAND_RPC_ADD_ADDRESS_BOOK_ENTRY)
         MAP_JON_RPC_WE("delete_address_book", on_delete_address_book, wallet_rpc::COMMAND_RPC_DELETE_ADDRESS_BOOK_ENTRY)
         MAP_JON_RPC_WE("rescan_spent",        on_rescan_spent,        wallet_rpc::COMMAND_RPC_RESCAN_SPENT)
+		MAP_JON_RPC_WE("is_multisig",        on_is_multisig,        wallet_rpc::COMMAND_RPC_IS_MULTISIG)
+        MAP_JON_RPC_WE("prepare_multisig",   on_prepare_multisig,   wallet_rpc::COMMAND_RPC_PREPARE_MULTISIG)
+        MAP_JON_RPC_WE("make_multisig",      on_make_multisig,      wallet_rpc::COMMAND_RPC_MAKE_MULTISIG)
+        MAP_JON_RPC_WE("export_multisig_info", on_export_multisig,  wallet_rpc::COMMAND_RPC_EXPORT_MULTISIG)
+        MAP_JON_RPC_WE("import_multisig_info", on_import_multisig,  wallet_rpc::COMMAND_RPC_IMPORT_MULTISIG)
+        MAP_JON_RPC_WE("finalize_multisig",  on_finalize_multisig,  wallet_rpc::COMMAND_RPC_FINALIZE_MULTISIG)
+        MAP_JON_RPC_WE("sign_multisig",      on_sign_multisig,      wallet_rpc::COMMAND_RPC_SIGN_MULTISIG)
+        MAP_JON_RPC_WE("submit_multisig",    on_submit_multisig,    wallet_rpc::COMMAND_RPC_SUBMIT_MULTISIG)
       END_JSON_RPC_MAP()
     END_URI_MAP2()
 
@@ -131,6 +139,14 @@ namespace tools
       bool on_add_address_book(const wallet_rpc::COMMAND_RPC_ADD_ADDRESS_BOOK_ENTRY::request& req, wallet_rpc::COMMAND_RPC_ADD_ADDRESS_BOOK_ENTRY::response& res, epee::json_rpc::error& er);
       bool on_delete_address_book(const wallet_rpc::COMMAND_RPC_DELETE_ADDRESS_BOOK_ENTRY::request& req, wallet_rpc::COMMAND_RPC_DELETE_ADDRESS_BOOK_ENTRY::response& res, epee::json_rpc::error& er);
       bool on_rescan_spent(const wallet_rpc::COMMAND_RPC_RESCAN_SPENT::request& req, wallet_rpc::COMMAND_RPC_RESCAN_SPENT::response& res, epee::json_rpc::error& er);
+	  bool on_is_multisig(const wallet_rpc::COMMAND_RPC_IS_MULTISIG::request& req, wallet_rpc::COMMAND_RPC_IS_MULTISIG::response& res, epee::json_rpc::error& er);
+	  bool on_prepare_multisig(const wallet_rpc::COMMAND_RPC_PREPARE_MULTISIG::request& req, wallet_rpc::COMMAND_RPC_PREPARE_MULTISIG::response& res, epee::json_rpc::error& er);
+	  bool on_make_multisig(const wallet_rpc::COMMAND_RPC_MAKE_MULTISIG::request& req, wallet_rpc::COMMAND_RPC_MAKE_MULTISIG::response& res, epee::json_rpc::error& er);
+	  bool on_export_multisig(const wallet_rpc::COMMAND_RPC_EXPORT_MULTISIG::request& req, wallet_rpc::COMMAND_RPC_EXPORT_MULTISIG::response& res, epee::json_rpc::error& er);
+	  bool on_import_multisig(const wallet_rpc::COMMAND_RPC_IMPORT_MULTISIG::request& req, wallet_rpc::COMMAND_RPC_IMPORT_MULTISIG::response& res, epee::json_rpc::error& er);
+	  bool on_finalize_multisig(const wallet_rpc::COMMAND_RPC_FINALIZE_MULTISIG::request& req, wallet_rpc::COMMAND_RPC_FINALIZE_MULTISIG::response& res, epee::json_rpc::error& er);
+	  bool on_sign_multisig(const wallet_rpc::COMMAND_RPC_SIGN_MULTISIG::request& req, wallet_rpc::COMMAND_RPC_SIGN_MULTISIG::response& res, epee::json_rpc::error& er);
+	  bool on_submit_multisig(const wallet_rpc::COMMAND_RPC_SUBMIT_MULTISIG::request& req, wallet_rpc::COMMAND_RPC_SUBMIT_MULTISIG::response& res, epee::json_rpc::error& er);
 
       bool handle_command_line(const boost::program_options::variables_map& vm);
 
